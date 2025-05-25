@@ -1,1 +1,35 @@
-[]
+[
+  {
+    "codigoReserva": "RES-001",
+    "horarioInicio": "2024-03-20T10:00:00",
+    "horarioSalida": "2024-03-20T12:00:00",
+    "monto": 20000,
+    "estadoReserva": "CONFIRMADA",
+    "chapaAuto": "ABC-123",
+    "codigoLugar": "P1-A1",
+    "codigoPiso": "P1",
+    "clienteId": "cliente_1"
+  },
+  {
+    "codigoReserva": "RES-002",
+    "horarioInicio": "2024-03-21T14:00:00",
+    "horarioSalida": "2024-03-21T16:00:00",
+    "monto": 20000,
+    "estadoReserva": "PENDIENTE",
+    "chapaAuto": "XYZ-789",
+    "codigoLugar": "P2-B3",
+    "codigoPiso": "P2",
+    "clienteId": "cliente_1"
+  },
+  {
+    "codigoReserva": "RES-003",
+    "horarioInicio": "2024-03-22T09:00:00",
+    "horarioSalida": "2024-03-22T11:00:00",
+    "monto": 20000,
+    "estadoReserva": "CANCELADA",
+    "chapaAuto": "DEF-456",
+    "codigoLugar": "P1-C2",
+    "codigoPiso": "P1",
+    "clienteId": "cliente_1"
+  }
+]

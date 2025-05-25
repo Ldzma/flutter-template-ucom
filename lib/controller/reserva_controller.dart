@@ -1,8 +1,12 @@
+import 'package:flutter/material.dart';
 import 'package:finpay/model/sitema_reservas.dart';
+import 'package:finpay/services/reserva_service.dart';
 import 'package:get/get.dart';
 import 'package:finpay/api/local.db.service.dart';
 
 class ReservaController extends GetxController {
+  final ReservaService _reservaService = ReservaService();
+  
   RxList<Piso> pisos = <Piso>[].obs;
   Rx<Piso?> pisoSeleccionado = Rx<Piso?>(null);
   RxList<Lugar> lugaresDisponibles = <Lugar>[].obs;
@@ -13,8 +17,10 @@ class ReservaController extends GetxController {
   final db = LocalDBService();
   RxList<Auto> autosCliente = <Auto>[].obs;
   Rx<Auto?> autoSeleccionado = Rx<Auto?>(null);
+  RxBool isLoading = false.obs;
   String codigoClienteActual =
       'cliente_1'; // ← este puede venir de login o contexto
+
   @override
   void onInit() {
     super.onInit();
@@ -24,48 +30,104 @@ class ReservaController extends GetxController {
   }
 
   Future<void> cargarPisosYLugares() async {
-    final rawPisos = await db.getAll("pisos.json");
-    final rawLugares = await db.getAll("lugares.json");
-    final rawReservas = await db.getAll("reservas.json");
+    isLoading.value = true;
+    try {
+      // Aquí deberías cargar los pisos y lugares desde tu servicio
+      // Por ahora usamos datos de ejemplo
+      pisos.value = [
+        Piso(
+          codigo: "P1",
+          descripcion: "Piso 1",
+          lugares: [
+            Lugar(
+              codigoPiso: "P1",
+              codigoLugar: "P1-A1",
+              descripcionLugar: "Lugar A1",
+            ),
+            Lugar(
+              codigoPiso: "P1",
+              codigoLugar: "P1-A2",
+              descripcionLugar: "Lugar A2",
+            ),
+          ],
+        ),
+        Piso(
+          codigo: "P2",
+          descripcion: "Piso 2",
+          lugares: [
+            Lugar(
+              codigoPiso: "P2",
+              codigoLugar: "P2-B1",
+              descripcionLugar: "Lugar B1",
+            ),
+            Lugar(
+              codigoPiso: "P2",
+              codigoLugar: "P2-B2",
+              descripcionLugar: "Lugar B2",
+            ),
+          ],
+        ),
+      ];
 
-    final reservas = rawReservas.map((e) => Reserva.fromJson(e)).toList();
-    final lugaresReservados = reservas.map((r) => r.codigoReserva).toSet();
-
-    final todosLugares = rawLugares.map((e) => Lugar.fromJson(e)).toList();
-
-    // Unir pisos con sus lugares correspondientes
-    pisos.value = rawPisos.map((pJson) {
-      final codigoPiso = pJson['codigo'];
-      final lugaresDelPiso =
-          todosLugares.where((l) => l.codigoPiso == codigoPiso).toList();
-
-      return Piso(
-        codigo: codigoPiso,
-        descripcion: pJson['descripcion'],
-        lugares: lugaresDelPiso,
+      // Cargar lugares disponibles
+      await actualizarLugaresDisponibles();
+    } catch (e) {
+      print("Error al cargar pisos y lugares: $e");
+      Get.snackbar(
+        "Error",
+        "No se pudieron cargar los pisos y lugares",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+        colorText: Colors.red.shade900,
       );
-    }).toList();
-
-    // Inicializar lugares disponibles (solo los no reservados)
-    lugaresDisponibles.value = todosLugares.where((l) {
-      return !lugaresReservados.contains(l.codigoLugar);
-    }).toList();
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  Future<void> seleccionarPiso(Piso piso) {
+  Future<void> actualizarLugaresDisponibles() async {
+    if (pisoSeleccionado.value == null) return;
+
+    try {
+      final lugaresDelPiso = pisos
+          .firstWhere((p) => p.codigo == pisoSeleccionado.value!.codigo)
+          .lugares;
+
+      // Verificar disponibilidad de cada lugar
+      final lugaresDisponiblesTemp = <Lugar>[];
+      for (var lugar in lugaresDelPiso) {
+        if (horarioInicio.value != null && horarioSalida.value != null) {
+          final disponible = await _reservaService.verificarDisponibilidadLugar(
+            lugar.codigoLugar,
+            horarioInicio.value!,
+            horarioSalida.value!,
+          );
+          if (disponible) {
+            lugaresDisponiblesTemp.add(lugar);
+          }
+        } else {
+          lugaresDisponiblesTemp.add(lugar);
+        }
+      }
+
+      lugaresDisponibles.value = lugaresDisponiblesTemp;
+    } catch (e) {
+      print("Error al actualizar lugares disponibles: $e");
+    }
+  }
+
+  Future<void> seleccionarPiso(Piso piso) async {
     pisoSeleccionado.value = piso;
     lugarSeleccionado.value = null;
-
-    // filtrar lugares de este piso
-    lugaresDisponibles.refresh();
-    return Future.value();
+    await actualizarLugaresDisponibles();
   }
 
   Future<bool> confirmarReserva() async {
     if (pisoSeleccionado.value == null ||
         lugarSeleccionado.value == null ||
         horarioInicio.value == null ||
-        horarioSalida.value == null) {
+        horarioSalida.value == null ||
+        autoSeleccionado.value == null) {
       return false;
     }
 
@@ -74,9 +136,10 @@ class ReservaController extends GetxController {
 
     if (duracionEnHoras <= 0) return false;
 
-    final montoCalculado = (duracionEnHoras * 10000).roundToDouble();
-
-    if (autoSeleccionado.value == null) return false;
+    final montoCalculado = _reservaService.calcularMontoReserva(
+      horarioInicio.value!,
+      horarioSalida.value!,
+    );
 
     final nuevaReserva = Reserva(
       codigoReserva: "RES-${DateTime.now().millisecondsSinceEpoch}",
@@ -85,27 +148,20 @@ class ReservaController extends GetxController {
       monto: montoCalculado,
       estadoReserva: "PENDIENTE",
       chapaAuto: autoSeleccionado.value!.chapa,
+      codigoLugar: lugarSeleccionado.value!.codigoLugar,
+      codigoPiso: pisoSeleccionado.value!.codigo,
+      clienteId: codigoClienteActual,
     );
 
     try {
-      // Guardar la reserva
-      final reservas = await db.getAll("reservas.json");
-      reservas.add(nuevaReserva.toJson());
-      await db.saveAll("reservas.json", reservas);
-
-      // Marcar el lugar como reservado
-      final lugares = await db.getAll("lugares.json");
-      final index = lugares.indexWhere(
-        (l) => l['codigoLugar'] == lugarSeleccionado.value!.codigoLugar,
-      );
-      if (index != -1) {
-        lugares[index]['estado'] = "RESERVADO";
-        await db.saveAll("lugares.json", lugares);
+      final creada = await _reservaService.crearReserva(nuevaReserva);
+      if (creada) {
+        await actualizarLugaresDisponibles();
+        return true;
       }
-
-      return true;
+      return false;
     } catch (e) {
-      print("Error al guardar reserva: $e");
+      print("Error al crear reserva: $e");
       return false;
     }
   }
@@ -119,11 +175,35 @@ class ReservaController extends GetxController {
   }
 
   Future<void> cargarAutosDelCliente() async {
-    final rawAutos = await db.getAll("autos.json");
-    final autos = rawAutos.map((e) => Auto.fromJson(e)).toList();
-
-    autosCliente.value =
-        autos.where((a) => a.clienteId == codigoClienteActual).toList();
+    try {
+      // Aquí deberías cargar los autos desde tu servicio
+      // Por ahora usamos datos de ejemplo
+      autosCliente.value = [
+        Auto(
+          chapa: "ABC-123",
+          marca: "Toyota",
+          modelo: "Corolla",
+          chasis: "CHS123456",
+          clienteId: codigoClienteActual,
+        ),
+        Auto(
+          chapa: "XYZ-789",
+          marca: "Honda",
+          modelo: "Civic",
+          chasis: "CHS789012",
+          clienteId: codigoClienteActual,
+        ),
+      ];
+    } catch (e) {
+      print("Error al cargar autos del cliente: $e");
+      Get.snackbar(
+        "Error",
+        "No se pudieron cargar los autos",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+        colorText: Colors.red.shade900,
+      );
+    }
   }
 
   @override

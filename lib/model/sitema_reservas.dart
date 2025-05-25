@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart';
+
 class Cliente {
   String id;
   String nombre;
@@ -120,7 +122,10 @@ class Reserva {
   DateTime horarioSalida;
   double monto;
   String estadoReserva;
-  String chapaAuto; // solo la chapa
+  String chapaAuto;
+  String codigoLugar;
+  String codigoPiso;
+  String clienteId;
 
   Reserva({
     required this.codigoReserva,
@@ -129,6 +134,9 @@ class Reserva {
     required this.monto,
     required this.estadoReserva,
     required this.chapaAuto,
+    required this.codigoLugar,
+    required this.codigoPiso,
+    required this.clienteId,
   });
 
   factory Reserva.fromJson(Map<String, dynamic> json) => Reserva(
@@ -137,7 +145,10 @@ class Reserva {
         horarioSalida: DateTime.parse(json['horarioSalida']),
         monto: json['monto'].toDouble(),
         estadoReserva: json['estadoReserva'],
-        chapaAuto: json['chapaAuto'] ?? '',
+        chapaAuto: json['chapaAuto'],
+        codigoLugar: json['codigoLugar'],
+        codigoPiso: json['codigoPiso'],
+        clienteId: json['clienteId'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -147,7 +158,36 @@ class Reserva {
         'monto': monto,
         'estadoReserva': estadoReserva,
         'chapaAuto': chapaAuto,
+        'codigoLugar': codigoLugar,
+        'codigoPiso': codigoPiso,
+        'clienteId': clienteId,
       };
+
+  String get estadoFormateado {
+    switch (estadoReserva) {
+      case "CONFIRMADA":
+        return "Confirmada";
+      case "PENDIENTE":
+        return "Pendiente";
+      case "CANCELADA":
+        return "Cancelada";
+      default:
+        return estadoReserva;
+    }
+  }
+
+  Color get colorEstado {
+    switch (estadoReserva) {
+      case "CONFIRMADA":
+        return Colors.green;
+      case "PENDIENTE":
+        return Colors.orange;
+      case "CANCELADA":
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
 }
 
 class Pago {

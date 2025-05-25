@@ -51,7 +51,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Notifications",
+                      "Notificaciones",
                       style: Theme.of(context).textTheme.titleLarge!.copyWith(
                             fontSize: 24,
                             fontWeight: FontWeight.w800,
@@ -60,13 +60,41 @@ class _NotificationScreenState extends State<NotificationScreen> {
                     const SizedBox(height: 32),
                     notificationView(
                       context,
-                      "Fee alert",
+                      "Alerta de tarifas",
                       CupertinoSwitch(
                         value: profileController.alert.value,
                         activeColor: HexColor(AppTheme.primaryColorString!),
                         onChanged: (v) {
                           setState(() {
                             profileController.alert.value = v;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    notificationView(
+                      context,
+                      "Alerta de pagos recurrentes",
+                      CupertinoSwitch(
+                        value: profileController.paid.value,
+                        activeColor: HexColor(AppTheme.primaryColorString!),
+                        onChanged: (v) {
+                          setState(() {
+                            profileController.paid.value = v;
+                          });
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    notificationView(
+                      context,
+                      "Actualización de gastos",
+                      CupertinoSwitch(
+                        value: profileController.spending.value,
+                        activeColor: HexColor(AppTheme.primaryColorString!),
+                        onChanged: (v) {
+                          setState(() {
+                            profileController.spending.value = v;
                           });
                         },
                       ),
@@ -113,34 +141,6 @@ class _NotificationScreenState extends State<NotificationScreen> {
                         },
                       ),
                     ),
-                    const SizedBox(height: 32),
-                    notificationView(
-                      context,
-                      "Recurring paid alert",
-                      CupertinoSwitch(
-                        value: profileController.paid.value,
-                        activeColor: HexColor(AppTheme.primaryColorString!),
-                        onChanged: (v) {
-                          setState(() {
-                            profileController.paid.value = v;
-                          });
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-                    notificationView(
-                      context,
-                      "Spending update",
-                      CupertinoSwitch(
-                        value: profileController.spending.value,
-                        activeColor: HexColor(AppTheme.primaryColorString!),
-                        onChanged: (v) {
-                          setState(() {
-                            profileController.spending.value = v;
-                          });
-                        },
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -150,7 +150,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
             padding:
                 const EdgeInsets.only(left: 20, right: 20, top: 20, bottom: 20),
             child: CustomButton(
-              title: "Save Changes",
+              title: "Guardar Cambios",
               onTap: () {
                 Navigator.pop(context);
               },
