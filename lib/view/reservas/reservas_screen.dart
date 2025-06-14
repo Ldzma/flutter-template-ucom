@@ -6,6 +6,7 @@ import 'package:finpay/view/reservas/mis_reservas_screen.dart';
 import 'package:finpay/widgets/custom_button.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:finpay/controller/home_controller.dart';
 
 class ReservaScreen extends StatelessWidget {
   final controller = Get.put(ReservaController());
@@ -81,6 +82,13 @@ class ReservaScreen extends StatelessWidget {
                     final confirmada = await controller.confirmarReserva();
 
                     if (confirmada) {
+                      // Refrescar contadores en HomeController
+                      final homeController = Get.find<HomeController>();
+                      await homeController.cargarPagosPrevios();
+                      await homeController.cargarPagosDelMes();
+                      await homeController.cargarPagosPendientes();
+                      await homeController.cargarVehiculosEstacionados();
+
                       Get.snackbar(
                         "Éxito",
                         "Reserva realizada correctamente",
@@ -188,26 +196,37 @@ class ReservaScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: Obx(() {
+        // Obtener todos los lugares del piso seleccionado
+        final todosLugares = controller.pisoSeleccionado.value?.lugares ?? [];
+        // Los lugares disponibles ya están filtrados en controller.lugaresDisponibles
         return GridView.count(
           padding: const EdgeInsets.all(16),
           crossAxisCount: 4,
                     crossAxisSpacing: 8,
                     mainAxisSpacing: 8,
-          children: controller.lugaresDisponibles.map((lugar) {
+          children: todosLugares.map((lugar) {
+            final disponible = controller.lugaresDisponibles.contains(lugar);
             final seleccionado = lugar == controller.lugarSeleccionado.value;
             final color = seleccionado
                 ? Theme.of(Get.context!).primaryColor
-                              : Colors.grey.shade300;
-
+                : disponible
+                    ? Colors.grey.shade300
+                    : Colors.grey.shade200;
                       return GestureDetector(
-              onTap: () => controller.lugarSeleccionado.value = lugar,
+              onTap: disponible
+                  ? () => controller.lugarSeleccionado.value = lugar
+                  : null,
+              child: Opacity(
+                opacity: disponible ? 1.0 : 0.5,
                         child: Container(
                           decoration: BoxDecoration(
                   color: color.withOpacity(0.1),
                             border: Border.all(
                                 color: seleccionado
                         ? Theme.of(Get.context!).primaryColor
-                        : Colors.grey.shade400,
+                          : disponible
+                              ? Colors.grey.shade400
+                              : Colors.grey.shade300,
                   ),
                             borderRadius: BorderRadius.circular(8),
                           ),
@@ -217,8 +236,11 @@ class ReservaScreen extends StatelessWidget {
                             style: TextStyle(
                       color: seleccionado
                           ? Theme.of(Get.context!).primaryColor
-                          : Colors.grey.shade800,
+                            : disponible
+                                ? Colors.grey.shade800
+                                : Colors.grey.shade500,
                               fontWeight: FontWeight.bold,
+                      ),
                     ),
                             ),
                           ),

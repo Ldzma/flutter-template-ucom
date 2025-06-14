@@ -111,6 +111,11 @@ class ReservaController extends GetxController {
       }
 
       lugaresDisponibles.value = lugaresDisponiblesTemp;
+      // Si el lugar seleccionado ya no está disponible, deseleccionarlo
+      if (lugarSeleccionado.value != null &&
+          !lugaresDisponiblesTemp.contains(lugarSeleccionado.value)) {
+        lugarSeleccionado.value = null;
+      }
     } catch (e) {
       print("Error al actualizar lugares disponibles: $e");
     }
@@ -142,7 +147,7 @@ class ReservaController extends GetxController {
     );
 
     final nuevaReserva = Reserva(
-      codigoReserva: "RES-${DateTime.now().millisecondsSinceEpoch}",
+      codigoReserva: "RES-PEND-${DateTime.now().millisecondsSinceEpoch}",
       horarioInicio: horarioInicio.value!,
       horarioSalida: horarioSalida.value!,
       monto: montoCalculado,
@@ -154,7 +159,8 @@ class ReservaController extends GetxController {
     );
 
     try {
-      final creada = await _reservaService.crearReserva(nuevaReserva);
+      // Crear la reserva en el archivo de reservas pendientes
+      final creada = await _reservaService.crearReservaPendiente(nuevaReserva);
       if (creada) {
         await actualizarLugaresDisponibles();
         return true;

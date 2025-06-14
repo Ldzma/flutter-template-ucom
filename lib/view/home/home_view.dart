@@ -15,6 +15,8 @@ import 'package:finpay/view/reservas/reservas_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
+import 'package:finpay/services/reserva_service.dart';
+import 'package:finpay/api/local.db.service.dart';
 
 class HomeView extends StatelessWidget {
   final HomeController homeController;
@@ -170,23 +172,126 @@ class HomeView extends StatelessWidget {
                 const SizedBox(height: 10),
                 Padding(
                   padding: const EdgeInsets.only(left: 20, right: 20),
-                  child: SizedBox(
-                    height: 180,
-                    width: Get.width,
-                    child: Swiper(
-                      itemBuilder: (BuildContext context, int index) {
-                        return SvgPicture.asset(
-                          DefaultImages.debitcard,
-                          fit: BoxFit.fill,
-                        );
-                      },
-                      itemCount: 3,
-                      viewportFraction: 1,
-                      scale: 0.9,
-                      autoplay: true,
-                      itemWidth: Get.width,
-                      itemHeight: 180,
-                    ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // Contenedor de Pagos Realizados
+                      Expanded(
+                        child: Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppTheme.isLightTheme == false
+                                ? const Color(0xff323045)
+                                : HexColor(AppTheme.primaryColorString!).withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.payments_outlined, size: 24),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Pagos del Mes",
+                                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Obx(() => Text(
+                                  "${homeController.pagosDelMes}",
+                                  style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Contenedor de Pagos Pendientes
+                      Expanded(
+                        child: Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppTheme.isLightTheme == false
+                                ? const Color(0xff323045)
+                                : HexColor(AppTheme.primaryColorString!).withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.pending_actions_outlined, size: 24),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Pagos Pendientes",
+                                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Obx(() => Text(
+                                  "${homeController.pagosPendientes}",
+                                  style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                )),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      // Contenedor de Vehículos
+                      Expanded(
+                        child: Container(
+                          height: 120,
+                          decoration: BoxDecoration(
+                            color: AppTheme.isLightTheme == false
+                                ? const Color(0xff323045)
+                                : HexColor(AppTheme.primaryColorString!).withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Icon(Icons.directions_car_outlined, size: 24),
+                                const SizedBox(height: 8),
+                                Text(
+                                  "Mis Vehículos",
+                                  style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Obx(() {
+                                  final reservaController = Get.find<ReservaController>();
+                                  return Text(
+                                    "${reservaController.autosCliente.length}",
+                                    style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                                      fontSize: 24,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  );
+                                }),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -229,8 +334,7 @@ class HomeView extends StatelessWidget {
                           () => ReservaScreen(),
                           binding: BindingsBuilder(() {
                             Get.delete<
-                                ReservaController>(); // 🔥 elimina instancia previa
-
+                                ReservaController>(); 
                             Get.create(() => ReservaController());
                           }),
                           transition: Transition.downToUp,
@@ -284,18 +388,19 @@ class HomeView extends StatelessWidget {
                         ),
                         const SizedBox(height: 20),
                         Obx(() {
+                          final pagosModulo = homeController.pagosPrevios
+                              .where((pago) => pago.origen == "pago_modulo")
+                              .toList();
                           return Column(
-                            children: homeController.pagosPrevios.map((pago) {
+                            children: pagosModulo.map((pago) {
                               return Padding(
                                 padding: const EdgeInsets.only(bottom: 10),
                                 child: ListTile(
                                   leading: const Icon(Icons.payments_outlined),
-                                  title: Text(
-                                      "Reserva: ${pago.codigoReservaAsociada}"),
-                                  subtitle: Text(
-                                      "Fecha: ${UtilesApp.formatearFechaDdMMAaaa(pago.fechaPago)}"),
+                                  title: Text("Reserva: "+pago.codigoReservaAsociada),
+                                  subtitle: Text("Fecha: "+UtilesApp.formatearFechaDdMMAaaa(pago.fechaPago)),
                                   trailing: Text(
-                                    "- ${UtilesApp.formatearGuaranies(pago.montoPagado)}",
+                                    "- "+UtilesApp.formatearGuaranies(pago.montoPagado),
                                     style: TextStyle(
                                         color: Colors.red,
                                         fontWeight: FontWeight.bold,

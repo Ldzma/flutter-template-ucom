@@ -1,0 +1,13 @@
+[
+  {
+    "codigoReserva": "RES-PEND-001",
+    "horarioInicio": "2024-03-25T10:00:00",
+    "horarioSalida": "2024-03-25T12:00:00",
+    "monto": 20000,
+    "estadoReserva": "PENDIENTE",
+    "chapaAuto": "ABC-123",
+    "codigoLugar": "P1-A1",
+    "codigoPiso": "P1",
+    "clienteId": "cliente_1"
+  }
+] 

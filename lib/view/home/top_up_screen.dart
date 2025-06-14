@@ -2,12 +2,15 @@
 
 import 'package:finpay/config/images.dart';
 import 'package:finpay/config/textstyle.dart';
-import 'package:finpay/view/home/topup_dialog.dart';
-import 'package:finpay/view/home/widget/amount_container.dart';
+import 'package:finpay/model/sitema_reservas.dart';
+import 'package:finpay/services/reserva_service.dart';
+import 'package:finpay/utils/utiles.dart';
+import 'package:finpay/widgets/custom_button.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:get/get.dart';
-import 'package:swipe/swipe.dart';
+import 'package:finpay/controller/home_controller.dart';
+import 'package:finpay/api/local.db.service.dart';
 
 class TopUpSCreen extends StatefulWidget {
   const TopUpSCreen({Key? key}) : super(key: key);
@@ -17,6 +20,225 @@ class TopUpSCreen extends StatefulWidget {
 }
 
 class _TopUpSCreenState extends State<TopUpSCreen> {
+  final ReservaService _reservaService = ReservaService();
+  final String clienteId = 'cliente_1'; // Esto debería venir del login
+  RxList<Reserva> reservasPendientes = <Reserva>[].obs;
+  RxBool isLoading = true.obs;
+
+  @override
+  void initState() {
+    super.initState();
+    cargarReservasPendientes();
+  }
+
+  Future<void> cargarReservasPendientes() async {
+    isLoading.value = true;
+    try {
+      final reservas = await _reservaService.obtenerReservasPendientesPorCliente(clienteId);
+      reservasPendientes.value = reservas;
+    } catch (e) {
+      print("Error al cargar reservas: $e");
+      Get.snackbar(
+        "Error",
+        "No se pudieron cargar las reservas",
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red.shade100,
+        colorText: Colors.red.shade900,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> cancelarReservaPendiente(String codigoReserva) async {
+    final confirmacion = await Get.dialog<bool>(
+      AlertDialog(
+        title: const Text("Cancelar Reserva"),
+        content: const Text("¿Estás seguro que deseas cancelar esta reserva?"),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: const Text("No"),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text("Sí, Cancelar"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmacion == true) {
+      try {
+        final cancelada = await _reservaService.cancelarReservaPendiente(codigoReserva);
+        if (cancelada) {
+          // Actualizar contadores en HomeController
+          final homeController = Get.find<HomeController>();
+          await homeController.cargarPagosPendientes();
+          
+          // Actualizar lista de reservas pendientes
+          await cargarReservasPendientes();
+          
+          Get.snackbar(
+            "Éxito",
+            "Reserva cancelada correctamente",
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.green.shade100,
+            colorText: Colors.green.shade900,
+          );
+        }
+      } catch (e) {
+        print("Error al cancelar reserva: $e");
+        Get.snackbar(
+          "Error",
+          "No se pudo cancelar la reserva",
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red.shade100,
+          colorText: Colors.red.shade900,
+        );
+      }
+    }
+  }
+
+  void mostrarDetallesReserva(Reserva reserva) {
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: AppTheme.isLightTheme == false
+              ? const Color(0xff211F32)
+              : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  "Detalles de la Reserva",
+                  style: Theme.of(context).textTheme.titleLarge!.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Get.back(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            _buildDetalleRow("Código", "#${reserva.codigoReserva}"),
+            _buildDetalleRow("Lugar", "${reserva.codigoLugar} (Piso ${reserva.codigoPiso})"),
+            _buildDetalleRow("Auto", reserva.chapaAuto),
+            _buildDetalleRow(
+              "Inicio",
+              "${UtilesApp.formatearFechaDdMMAaaa(reserva.horarioInicio)} ${TimeOfDay.fromDateTime(reserva.horarioInicio).format(context)}",
+            ),
+            _buildDetalleRow(
+              "Fin",
+              "${UtilesApp.formatearFechaDdMMAaaa(reserva.horarioSalida)} ${TimeOfDay.fromDateTime(reserva.horarioSalida).format(context)}",
+            ),
+            const Divider(height: 30),
+            _buildDetalleRow(
+              "Monto a Pagar",
+              "₲${UtilesApp.formatearGuaranies(reserva.monto)}",
+              isBold: true,
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    title: "Cancelar Reserva",
+                    onTap: () {
+                      Get.back(); // Cerrar el bottom sheet
+                      cancelarReservaPendiente(reserva.codigoReserva);
+                    },
+                    backgroundColor: Colors.red,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: CustomButton(
+                    title: "Pagar Reserva",
+                    onTap: () async {
+                      Get.back(); // Cerrar el bottom sheet
+                      // Lógica de pago existente...
+                      final pago = Pago(
+                        codigoPago: "PAG-${DateTime.now().millisecondsSinceEpoch}",
+                        codigoReservaAsociada: reserva.codigoReserva,
+                        montoPagado: reserva.monto,
+                        fechaPago: DateTime.now(),
+                        origen: "pago_modulo",
+                      );
+                      
+                      // Guardar el pago en la base de datos
+                      final db = LocalDBService();
+                      final data = await db.getAll("pagos.json");
+                      data.add(pago.toJson());
+                      await db.saveAll("pagos.json", data);
+                      
+                      // Confirmar la reserva pendiente
+                      await _reservaService.confirmarReservaPendiente(reserva.codigoReserva);
+                      
+                      // Actualizar contadores en HomeController
+                      final homeController = Get.find<HomeController>();
+                      await homeController.cargarPagosPrevios();
+                      await homeController.cargarPagosDelMes();
+                      await homeController.cargarPagosPendientes();
+                      
+                      // Actualizar lista de reservas pendientes
+                      await cargarReservasPendientes();
+                      
+                      Get.snackbar(
+                        "Éxito",
+                        "Pago procesado correctamente",
+                        snackPosition: SnackPosition.BOTTOM,
+                        backgroundColor: Colors.green.shade100,
+                        colorText: Colors.green.shade900,
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetalleRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade600,
+              fontSize: 14,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+              fontSize: 14,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -47,7 +269,7 @@ class _TopUpSCreenState extends State<TopUpSCreen> {
                     ),
                     const Expanded(child: SizedBox()),
                     Text(
-                      "Top Up",
+                      "Pagar Reserva",
                       style: Theme.of(context).textTheme.titleLarge!.copyWith(
                             color: Colors.white,
                             fontSize: 20,
@@ -76,193 +298,153 @@ class _TopUpSCreenState extends State<TopUpSCreen> {
                       topRight: Radius.circular(24),
                     ),
                   ),
-                  child: ListView(
-                    physics: const ClampingScrollPhysics(),
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 50),
+                  child: Obx(() {
+                    if (isLoading.value) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    if (reservasPendientes.isEmpty) {
+                      return Center(
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            const SizedBox(height: 30),
-                            Container(
-                              height: 80,
-                              width: 80,
-                              decoration: BoxDecoration(
-                                color: const Color(0xffF5F7FE),
-                                borderRadius: BorderRadius.circular(24),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(18.0),
-                                child: SvgPicture.asset(
-                                  DefaultImages.unicorn,
-                                ),
-                              ),
+                            Icon(
+                              Icons.payment_outlined,
+                              size: 64,
+                              color: Colors.grey.shade400,
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              "Finpay Card",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleLarge!
-                                  .copyWith(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              "••••   ••••   ••••   5318",
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall!
-                                  .copyWith(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w600,
-                                    color: const Color(0xffA2A0A8),
-                                  ),
-                            ),
-                            const SizedBox(height: 40),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 20, right: 20),
-                              child: amountContainer(context, "500"),
-                            ),
-                            const SizedBox(height: 24),
-                            Padding(
-                              padding:
-                                  const EdgeInsets.only(left: 20, right: 20),
-                              child: Container(
-                                height: 64,
-                                width: Get.width,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(24),
-                                  color: AppTheme.isLightTheme == false
-                                      ? const Color(0xff323045)
-                                      : Colors.transparent,
-                                  border: Border.all(
-                                    color:
-                                        HexColor(AppTheme.primaryColorString!)
-                                            .withOpacity(0.05),
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Padding(
-                                  padding: const EdgeInsets.only(
-                                      left: 16, right: 16),
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.center,
-                                    children: [
-                                      SvgPicture.asset(
-                                        DefaultImages.mastercard,
-                                      ),
-                                      const SizedBox(width: 15),
-                                      Text(
-                                        "Debit",
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall!
-                                            .copyWith(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                      ),
-                                      const Expanded(child: SizedBox()),
-                                      Text(
-                                        "\$7,124",
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodyLarge!
-                                            .copyWith(
-                                              fontSize: 18,
-                                              fontWeight: FontWeight.w800,
-                                            ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      const Icon(
-                                        Icons.keyboard_arrow_down_outlined,
-                                        color: Color(0xffA2A0A8),
-                                        size: 30,
-                                      )
-                                    ],
-                                  ),
-                                ),
+                              "No tienes reservas pendientes de pago",
+                              style: TextStyle(
+                                fontSize: 18,
+                                color: Colors.grey.shade600,
                               ),
-                            )
+                            ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 50),
-                    ],
-                  ),
+                      );
+                    }
+
+                    return ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: reservasPendientes.length,
+                      itemBuilder: (context, index) {
+                        final reserva = reservasPendientes[index];
+                        return Card(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: InkWell(
+                            onTap: () => mostrarDetallesReserva(reserva),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "Reserva #${reserva.codigoReserva}",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.orange.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: const Text(
+                                          "Pendiente",
+                                          style: TextStyle(
+                                            color: Colors.orange,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  _buildInfoRow(
+                                    Icons.location_on,
+                                    "Lugar: ${reserva.codigoLugar} (Piso ${reserva.codigoPiso})",
+                                  ),
+                                  const SizedBox(height: 8),
+                                  _buildInfoRow(
+                                    Icons.access_time,
+                                    "Inicio: ${UtilesApp.formatearFechaDdMMAaaa(reserva.horarioInicio)} ${TimeOfDay.fromDateTime(reserva.horarioInicio).format(context)}",
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(
+                                        "Monto: ₲${UtilesApp.formatearGuaranies(reserva.monto)}",
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: Text(
+                                          "Tocar para pagar",
+                                          style: TextStyle(
+                                            color: Theme.of(context).primaryColor,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  }),
                 ),
               ),
             ],
           ),
-          Padding(
-            padding: EdgeInsets.only(
-              bottom: MediaQuery.of(context).padding.bottom,
-            ),
-            child: Swipe(
-              onSwipeRight: () {
-                Get.bottomSheet(
-                  topupDialog(context),
-                );
-              },
-              child: Padding(
-                padding: const EdgeInsets.only(
-                    left: 20, right: 20, top: 20, bottom: 20),
-                child: Container(
-                  height: 56,
-                  width: Get.width,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    color: AppTheme.isLightTheme == false
-                        ? HexColor(AppTheme.primaryColorString!)
-                        : HexColor(AppTheme.primaryColorString!)
-                            .withOpacity(0.05),
-                  ),
-                  child: Row(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(4.0),
-                        child: Container(
-                          height: 48,
-                          width: 48,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            color: AppTheme.isLightTheme == false
-                                ? Colors.white
-                                : HexColor(AppTheme.primaryColorString!),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12.0),
-                            child: SvgPicture.asset(
-                              DefaultImages.swipe,
-                              color: AppTheme.isLightTheme == false
-                                  ? HexColor(AppTheme.primaryColorString!)
-                                  : Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const Expanded(child: SizedBox()),
-                      Text(
-                        "Swipe to top-up",
-                        style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const Expanded(child: SizedBox()),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          )
         ],
       ),
     );
   }
-}
+
+  Widget _buildInfoRow(IconData icon, String text) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.grey.shade600),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: Colors.grey.shade800,
+              fontSize: 14,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+} 

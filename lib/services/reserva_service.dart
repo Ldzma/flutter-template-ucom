@@ -77,4 +77,98 @@ class ReservaService {
     final duracionEnHoras = fin.difference(inicio).inMinutes / 60;
     return (duracionEnHoras * 10000).roundToDouble();
   }
+
+  // Crear nueva reserva pendiente
+  Future<bool> crearReservaPendiente(Reserva reserva) async {
+    try {
+      final reservasPendientes = await _db.getAll("reservas_pendientes.json");
+      reservasPendientes.add(reserva.toJson());
+      await _db.saveAll("reservas_pendientes.json", reservasPendientes);
+      return true;
+    } catch (e) {
+      print("Error al crear reserva pendiente: $e");
+      return false;
+    }
+  }
+
+  // Obtener reservas pendientes
+  Future<List<Reserva>> obtenerReservasPendientes() async {
+    final data = await _db.getAll("reservas_pendientes.json");
+    return data.map((json) => Reserva.fromJson(json)).toList();
+  }
+
+  // Obtener reservas pendientes por cliente
+  Future<List<Reserva>> obtenerReservasPendientesPorCliente(String clienteId) async {
+    final reservas = await obtenerReservasPendientes();
+    return reservas.where((r) => r.clienteId == clienteId).toList();
+  }
+
+  // Mover reserva pendiente a reservas confirmadas
+  Future<bool> confirmarReservaPendiente(String codigoReserva) async {
+    try {
+      // Obtener todas las reservas pendientes
+      final reservasPendientes = await _db.getAll("reservas_pendientes.json");
+      final index = reservasPendientes.indexWhere((r) => r['codigoReserva'] == codigoReserva);
+      
+      if (index != -1) {
+        // Obtener la reserva pendiente
+        final reservaPendiente = reservasPendientes[index];
+        
+        // Actualizar el estado a CONFIRMADA
+        reservaPendiente['estadoReserva'] = "CONFIRMADA";
+        
+        // Agregar a reservas confirmadas
+        final reservasConfirmadas = await _db.getAll("reservas.json");
+        reservasConfirmadas.add(reservaPendiente);
+        await _db.saveAll("reservas.json", reservasConfirmadas);
+        
+        // Eliminar de reservas pendientes
+        reservasPendientes.removeAt(index);
+        await _db.saveAll("reservas_pendientes.json", reservasPendientes);
+        
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("Error al confirmar reserva pendiente: $e");
+      return false;
+    }
+  }
+
+  // Eliminar reserva pendiente
+  Future<bool> eliminarReservaPendiente(String codigoReserva) async {
+    try {
+      final reservasPendientes = await _db.getAll("reservas_pendientes.json");
+      final index = reservasPendientes.indexWhere((r) => r['codigoReserva'] == codigoReserva);
+      
+      if (index != -1) {
+        reservasPendientes.removeAt(index);
+        await _db.saveAll("reservas_pendientes.json", reservasPendientes);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("Error al eliminar reserva pendiente: $e");
+      return false;
+    }
+  }
+
+  // Cancelar reserva pendiente
+  Future<bool> cancelarReservaPendiente(String codigoReserva) async {
+    try {
+      final reservasPendientes = await _db.getAll("reservas_pendientes.json");
+      final index = reservasPendientes.indexWhere((r) => r['codigoReserva'] == codigoReserva);
+      
+      if (index != -1) {
+        // Eliminar directamente de reservas pendientes
+        reservasPendientes.removeAt(index);
+        await _db.saveAll("reservas_pendientes.json", reservasPendientes);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      print("Error al cancelar reserva pendiente: $e");
+      return false;
+    }
+  }
 } 
